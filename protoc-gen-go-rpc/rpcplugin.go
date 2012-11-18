@@ -67,9 +67,9 @@ func (g *RpcPlugin) Generate(file *FileDescriptor) {
 		g.P("}")
 
 		// client constructor
-		g.P("func New", serviceName, "Client(rname, net, raddr string) (csc *", serviceName, "Client, err error) {")
+		g.P("func New", serviceName, "Client(rname, raddr string) (csc *", serviceName, "Client, err error) {")
 		g.In()
-		g.P("client, err := protorpc.Dial(net, raddr)")
+		g.P("client, err := protorpc.Dial(raddr)")
 		g.P("if err != nil {")
 		g.In()
 		g.P("return")

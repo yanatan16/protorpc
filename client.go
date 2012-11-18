@@ -8,17 +8,16 @@ import (
 	"code.google.com/p/goprotobuf/proto"
 	"errors"
 	"io"
-	"net"
 	"net/rpc"
 )
 
 type clientCodec struct {
-	c    io.ReadWriteCloser
+	c    ReadWriteFlushCloser
 	req  *bufferPair
 	resp *bufferPair
 }
 
-func NewClientCodec(conn io.ReadWriteCloser) rpc.ClientCodec {
+func NewClientCodec(conn ReadWriteFlushCloser) rpc.ClientCodec {
 	req := &bufferPair{proto.NewBuffer(nil), proto.NewBuffer(nil)}
 	resp := &bufferPair{proto.NewBuffer(nil), proto.NewBuffer(nil)}
 
@@ -67,6 +66,8 @@ func (c *clientCodec) WriteRequest(r *rpc.Request, message interface{}) (err err
 		return
 	}
 
+	err = c.c.Flush()
+
 	return
 }
 
@@ -93,9 +94,9 @@ func (c *clientCodec) ReadResponseHeader(r *rpc.Response) (err error) {
 		return
 	}
 
-	r.Seq = *h.Seq
-	r.ServiceMethod = *h.ServiceMethod
-	r.Error = *h.Error
+	r.Seq = h.GetSeq()
+	r.ServiceMethod = h.GetServiceMethod()
+	r.Error = h.GetError()
 
 	return nil
 }
@@ -131,16 +132,4 @@ func (c *clientCodec) ReadResponseBody(message interface{}) (err error) {
 
 func (c *clientCodec) Close() error {
 	return c.c.Close()
-}
-
-func Dial(netw, raddr string) (*rpc.Client, error) {
-	conn, err := net.Dial(netw, raddr)
-	if err != nil {
-		return nil, err
-	}
-
-	codec := NewClientCodec(conn)
-	client := rpc.NewClientWithCodec(codec)
-
-	return client, nil
 }

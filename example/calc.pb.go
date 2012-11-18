@@ -85,8 +85,8 @@ type CalcServiceClient struct {
 	remoteName string
 }
 
-func NewCalcServiceClient(rname, net, raddr string) (csc *CalcServiceClient, err error) {
-	client, err := protorpc.Dial(net, raddr)
+func NewCalcServiceClient(rname, raddr string) (csc *CalcServiceClient, err error) {
+	client, err := protorpc.Dial(raddr)
 	if err != nil {
 		return
 	}

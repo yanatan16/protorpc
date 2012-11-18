@@ -8,17 +8,23 @@ import (
 	"code.google.com/p/goprotobuf/proto"
 	"errors"
 	"io"
-	"net"
 	"net/rpc"
 )
 
 type serverCodec struct {
-	c    io.ReadWriteCloser
+	c    ReadWriteFlushCloser
 	req  *bufferPair
 	resp *bufferPair
 }
 
-func NewServerCodec(conn io.ReadWriteCloser) rpc.ServerCodec {
+type ReadWriteFlushCloser interface {
+	io.Reader
+	io.Writer
+	io.Closer
+	Flush() error
+}
+
+func NewServerCodec(conn ReadWriteFlushCloser) rpc.ServerCodec {
 	req := &bufferPair{proto.NewBuffer(nil), proto.NewBuffer(nil)}
 	resp := &bufferPair{proto.NewBuffer(nil), proto.NewBuffer(nil)}
 
@@ -48,8 +54,8 @@ func (c *serverCodec) ReadRequestHeader(r *rpc.Request) (err error) {
 		return
 	}
 
-	r.Seq = *h.Seq
-	r.ServiceMethod = *h.ServiceMethod
+	r.Seq = h.GetSeq()
+	r.ServiceMethod = h.GetServiceMethod()
 
 	return
 }
@@ -124,27 +130,14 @@ func (c *serverCodec) WriteResponse(r *rpc.Response, message interface{}) (err e
 		}
 	} else {
 		err = errors.New("Message body does not implement goprotobuf.Message")
+		return
 	}
+
+	err = c.c.Flush()
 
 	return
 }
 
 func (c *serverCodec) Close() error {
 	return c.c.Close()
-}
-
-func ServeConn(conn io.ReadWriteCloser) {
-	rpc.ServeCodec(NewServerCodec(conn))
-}
-
-func Serve(l net.Listener) error {
-	for {
-		conn, err := l.Accept()
-		if err != nil {
-			return err
-		}
-
-		go ServeConn(conn)
-	}
-	return nil
 }

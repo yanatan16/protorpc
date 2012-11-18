@@ -30,60 +30,60 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 /*
-    A plugin for the Google protocol buffer compiler to generate Go code.
+   A plugin for the Google protocol buffer compiler to generate Go code.
 
-    This plugin takes no options and the protocol buffer file syntax does
-    not yet define any options for Go, so program does no option evaluation.
-    That may change.
+   This plugin takes no options and the protocol buffer file syntax does
+   not yet define any options for Go, so program does no option evaluation.
+   That may change.
 */
 
 package main
 
 import (
-    "io/ioutil"
-    "os"
+	"io/ioutil"
+	"os"
 
-    "code.google.com/p/goprotobuf/proto"
-    "code.google.com/p/goprotobuf/protoc-gen-go/generator"
+	"code.google.com/p/goprotobuf/proto"
+	"code.google.com/p/goprotobuf/protoc-gen-go/generator"
 )
 
 func main() {
-    // Begin by allocating a generator. The request and response structures are stored there
-    // so we can do error handling easily - the response structure contains the field to
-    // report failure.
-    g := generator.New()
+	// Begin by allocating a generator. The request and response structures are stored there
+	// so we can do error handling easily - the response structure contains the field to
+	// report failure.
+	g := generator.New()
 
-    data, err := ioutil.ReadAll(os.Stdin)
-    if err != nil {
-        g.Error(err, "reading input")
-    }
+	data, err := ioutil.ReadAll(os.Stdin)
+	if err != nil {
+		g.Error(err, "reading input")
+	}
 
-    if err := proto.Unmarshal(data, g.Request); err != nil {
-        g.Error(err, "parsing input proto")
-    }
+	if err := proto.Unmarshal(data, g.Request); err != nil {
+		g.Error(err, "parsing input proto")
+	}
 
-    if len(g.Request.FileToGenerate) == 0 {
-        g.Fail("no files to generate")
-    }
+	if len(g.Request.FileToGenerate) == 0 {
+		g.Fail("no files to generate")
+	}
 
-    g.CommandLineParameters(g.Request.GetParameter())
+	g.CommandLineParameters(g.Request.GetParameter())
 
-    // Create a wrapped version of the Descriptors and EnumDescriptors that
-    // point to the file that defines them.
-    g.WrapTypes()
+	// Create a wrapped version of the Descriptors and EnumDescriptors that
+	// point to the file that defines them.
+	g.WrapTypes()
 
-    g.SetPackageNames()
-    g.BuildTypeNameMap()
+	g.SetPackageNames()
+	g.BuildTypeNameMap()
 
-    g.GenerateAllFiles()
+	g.GenerateAllFiles()
 
-    // Send back the results.
-    data, err = proto.Marshal(g.Response)
-    if err != nil {
-        g.Error(err, "failed to marshal output proto")
-    }
-    _, err = os.Stdout.Write(data)
-    if err != nil {
-        g.Error(err, "failed to write output proto")
-    }
+	// Send back the results.
+	data, err = proto.Marshal(g.Response)
+	if err != nil {
+		g.Error(err, "failed to marshal output proto")
+	}
+	_, err = os.Stdout.Write(data)
+	if err != nil {
+		g.Error(err, "failed to write output proto")
+	}
 }
