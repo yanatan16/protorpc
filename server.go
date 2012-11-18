@@ -5,11 +5,11 @@
 package protorpc
 
 import (
-	"rpc"
+	"code.google.com/p/goprotobuf/proto"
+	"errors"
 	"io"
 	"net"
-	"os"
-	"goprotobuf.googlecode.com/hg/proto"
+	"net/rpc"
 )
 
 type serverCodec struct {
@@ -25,7 +25,7 @@ func NewServerCodec(conn io.ReadWriteCloser) rpc.ServerCodec {
 	return &serverCodec{conn, req, resp}
 }
 
-func (c *serverCodec) ReadRequestHeader(r *rpc.Request) (err os.Error) {
+func (c *serverCodec) ReadRequestHeader(r *rpc.Request) (err error) {
 	c.req.header.Reset()
 
 	lbuf := make([]byte, lenSize)
@@ -54,7 +54,7 @@ func (c *serverCodec) ReadRequestHeader(r *rpc.Request) (err os.Error) {
 	return
 }
 
-func (c *serverCodec) ReadRequestBody(message interface{}) (err os.Error) {
+func (c *serverCodec) ReadRequestBody(message interface{}) (err error) {
 	c.req.body.Reset()
 
 	lbuf := make([]byte, lenSize)
@@ -71,7 +71,11 @@ func (c *serverCodec) ReadRequestBody(message interface{}) (err os.Error) {
 
 	c.req.body.SetBuf(pbuf)
 
-	err = c.req.body.Unmarshal(message)
+	if msg, ok := message.(proto.Message); ok {
+		err = c.req.body.Unmarshal(msg)
+	} else {
+		err = errors.New("Message body does not implement goprotobuf.Message")
+	}
 	if err != nil {
 		return
 	}
@@ -79,7 +83,7 @@ func (c *serverCodec) ReadRequestBody(message interface{}) (err os.Error) {
 	return
 }
 
-func (c *serverCodec) WriteResponse(r *rpc.Response, message interface{}) (err os.Error) {
+func (c *serverCodec) WriteResponse(r *rpc.Response, message interface{}) (err error) {
 	c.resp.header.Reset()
 	c.resp.body.Reset()
 
@@ -103,8 +107,8 @@ func (c *serverCodec) WriteResponse(r *rpc.Response, message interface{}) (err o
 		return
 	}
 
-	if _, ok := message.(rpc.InvalidRequest); !ok {
-		err = c.resp.body.Marshal(message)
+	if msg, ok := message.(proto.Message); ok {
+		err = c.resp.body.Marshal(msg)
 		if err != nil {
 			return
 		}
@@ -118,12 +122,14 @@ func (c *serverCodec) WriteResponse(r *rpc.Response, message interface{}) (err o
 		if err != nil {
 			return
 		}
+	} else {
+		err = errors.New("Message body does not implement goprotobuf.Message")
 	}
 
 	return
 }
 
-func (c *serverCodec) Close() os.Error {
+func (c *serverCodec) Close() error {
 	return c.c.Close()
 }
 
@@ -131,7 +137,7 @@ func ServeConn(conn io.ReadWriteCloser) {
 	rpc.ServeCodec(NewServerCodec(conn))
 }
 
-func Serve(l net.Listener) os.Error {
+func Serve(l net.Listener) error {
 	for {
 		conn, err := l.Accept()
 		if err != nil {

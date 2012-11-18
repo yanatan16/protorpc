@@ -5,11 +5,11 @@
 package protorpc
 
 import (
-	"rpc"
+	"code.google.com/p/goprotobuf/proto"
+	"errors"
 	"io"
-	"os"
 	"net"
-	"goprotobuf.googlecode.com/hg/proto"
+	"net/rpc"
 )
 
 type clientCodec struct {
@@ -25,7 +25,7 @@ func NewClientCodec(conn io.ReadWriteCloser) rpc.ClientCodec {
 	return &clientCodec{conn, req, resp}
 }
 
-func (c *clientCodec) WriteRequest(r *rpc.Request, message interface{}) (err os.Error) {
+func (c *clientCodec) WriteRequest(r *rpc.Request, message interface{}) (err error) {
 	c.req.header.Reset()
 	c.req.body.Reset()
 
@@ -38,7 +38,11 @@ func (c *clientCodec) WriteRequest(r *rpc.Request, message interface{}) (err os.
 		return
 	}
 
-	err = c.req.body.Marshal(message)
+	if msg, ok := message.(proto.Message); ok {
+		err = c.req.body.Marshal(msg)
+	} else {
+		err = errors.New("Message body does not implement goprotobuf.Message")
+	}
 	if err != nil {
 		return
 	}
@@ -66,7 +70,7 @@ func (c *clientCodec) WriteRequest(r *rpc.Request, message interface{}) (err os.
 	return
 }
 
-func (c *clientCodec) ReadResponseHeader(r *rpc.Response) (err os.Error) {
+func (c *clientCodec) ReadResponseHeader(r *rpc.Response) (err error) {
 	c.resp.header.Reset()
 
 	lbuf := make([]byte, lenSize)
@@ -96,7 +100,7 @@ func (c *clientCodec) ReadResponseHeader(r *rpc.Response) (err os.Error) {
 	return nil
 }
 
-func (c *clientCodec) ReadResponseBody(message interface{}) (err os.Error) {
+func (c *clientCodec) ReadResponseBody(message interface{}) (err error) {
 	c.resp.body.Reset()
 
 	lbuf := make([]byte, lenSize)
@@ -113,7 +117,11 @@ func (c *clientCodec) ReadResponseBody(message interface{}) (err os.Error) {
 
 	c.resp.body.SetBuf(pbuf)
 
-	err = c.resp.body.Unmarshal(message)
+	if msg, ok := message.(proto.Message); ok {
+		err = c.resp.body.Unmarshal(msg)
+	} else {
+		err = errors.New("Message body does not implement goprotobuf.Message")
+	}
 	if err != nil {
 		return
 	}
@@ -121,12 +129,12 @@ func (c *clientCodec) ReadResponseBody(message interface{}) (err os.Error) {
 	return
 }
 
-func (c *clientCodec) Close() os.Error {
+func (c *clientCodec) Close() error {
 	return c.c.Close()
 }
 
-func Dial(netw, laddr, raddr string) (*rpc.Client, os.Error) {
-	conn, err := net.Dial(netw, laddr, raddr)
+func Dial(netw, raddr string) (*rpc.Client, error) {
+	conn, err := net.Dial(netw, raddr)
 	if err != nil {
 		return nil, err
 	}

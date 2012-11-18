@@ -4,7 +4,7 @@
 
 package protorpc
 
-import "goprotobuf.googlecode.com/hg/proto"
+import "code.google.com/p/goprotobuf/proto"
 
 type bufferPair struct {
 	header *proto.Buffer

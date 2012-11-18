@@ -5,7 +5,7 @@
 package main
 
 import (
-	. "goprotobuf.googlecode.com/hg/compiler/generator"
+	. "code.google.com/p/goprotobuf/protoc-gen-go/generator"
 	"log"
 )
 
@@ -45,14 +45,14 @@ func (g *RpcPlugin) Generate(file *FileDescriptor) {
 			input_type := CamelCaseSlice(g.ObjectNamed(*m.InputType).TypeName())
 			output_type := CamelCaseSlice(g.ObjectNamed(*m.OutputType).TypeName())
 
-			g.P(name, "(*", input_type, ", *", output_type, ") os.Error")
+			g.P(name, "(*", input_type, ", *", output_type, ") error")
 
 		}
 		g.Out()
 		g.P("}")
 
 		// build server registration helper
-		g.P("func Register", serviceName, "(s ", serviceName, ") os.Error {")
+		g.P("func Register", serviceName, "(s ", serviceName, ") error {")
 		g.In()
 		g.P("return rpc.Register(s)")
 		g.Out()
@@ -67,9 +67,9 @@ func (g *RpcPlugin) Generate(file *FileDescriptor) {
 		g.P("}")
 
 		// client constructor
-		g.P("func New", serviceName, "Client(rname, net, laddr, raddr string) (csc *", serviceName, "Client, err os.Error) {")
+		g.P("func New", serviceName, "Client(rname, net, raddr string) (csc *", serviceName, "Client, err error) {")
 		g.In()
-		g.P("client, err := protorpc.Dial(net, laddr, raddr)")
+		g.P("client, err := protorpc.Dial(net, raddr)")
 		g.P("if err != nil {")
 		g.In()
 		g.P("return")
@@ -83,17 +83,17 @@ func (g *RpcPlugin) Generate(file *FileDescriptor) {
 		g.P("}")
 
 		// build methods on client
-                for _, m := range sd.Method {
-                        name := *m.Name
-                        input_type := CamelCaseSlice(g.ObjectNamed(*m.InputType).TypeName())
-                        output_type := CamelCaseSlice(g.ObjectNamed(*m.OutputType).TypeName())
+		for _, m := range sd.Method {
+			name := *m.Name
+			input_type := CamelCaseSlice(g.ObjectNamed(*m.InputType).TypeName())
+			output_type := CamelCaseSlice(g.ObjectNamed(*m.OutputType).TypeName())
 
-			g.P("func (self *", serviceName, "Client) ", name, "(request *", input_type, ", response *", output_type, ") os.Error {")
+			g.P("func (self *", serviceName, "Client) ", name, "(request *", input_type, ", response *", output_type, ") error {")
 			g.In()
-			g.P("return self.Call(self.remoteName + ",Quote("." + name),", request, response)")
+			g.P("return self.Call(self.remoteName + ", Quote("."+name), ", request, response)")
 			g.Out()
 			g.P("}")
-                }
+		}
 
 	}
 }
@@ -101,8 +101,6 @@ func (g *RpcPlugin) Generate(file *FileDescriptor) {
 func (g *RpcPlugin) GenerateImports(file *FileDescriptor) {
 	g.P()
 	g.P("// protorpc imports")
-	g.P("import ", Quote("rpc"))
-	g.P("import ", Quote("github.com/eclark/protorpc"))
+	g.P("import ", Quote("net/rpc"))
+	g.P("import ", Quote("github.com/yanatan16/protorpc"))
 }
-
-
