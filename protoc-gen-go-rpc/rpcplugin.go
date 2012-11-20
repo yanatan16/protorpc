@@ -93,6 +93,8 @@ func (g *RpcPlugin) Generate(file *FileDescriptor) {
 			g.P("return self.Call(self.remoteName + ", Quote("."+name), ", request, response)")
 			g.Out()
 			g.P("}")
+
+			g.P()
 		}
 
 	}
@@ -103,4 +105,8 @@ func (g *RpcPlugin) GenerateImports(file *FileDescriptor) {
 	g.P("// protorpc imports")
 	g.P("import ", Quote("net/rpc"))
 	g.P("import ", Quote("github.com/yanatan16/protorpc"))
+
+	g.P("// Reference rpc and protorpc")
+	g.P("var _ = rpc.DefaultRPCPath")
+	g.P("var _ = protorpc.NewBufferPair")
 }

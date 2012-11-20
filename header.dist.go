@@ -8,13 +8,17 @@ import proto "code.google.com/p/goprotobuf/proto"
 import json "encoding/json"
 import math "math"
 
+// protorpc imports
+// import "net/rpc"
+// import "github.com/yanatan16/protorpc"
+
 // Reference proto, json, and math imports to suppress error if they are not otherwise used.
 var _ = proto.Marshal
 var _ = &json.SyntaxError{}
 var _ = math.Inf
 
 type Header struct {
-	Seq              *uint64 `protobuf:"varint,1,req,name=seq" json:"seq,omitempty"`
+	Id               *uint64 `protobuf:"varint,1,req,name=id" json:"id,omitempty"`
 	ServiceMethod    *string `protobuf:"bytes,2,req,name=service_method" json:"service_method,omitempty"`
 	Error            *string `protobuf:"bytes,3,opt,name=error" json:"error,omitempty"`
 	XXX_unrecognized []byte  `json:"-"`
@@ -24,9 +28,9 @@ func (this *Header) Reset()         { *this = Header{} }
 func (this *Header) String() string { return proto.CompactTextString(this) }
 func (*Header) ProtoMessage()       {}
 
-func (this *Header) GetSeq() uint64 {
-	if this != nil && this.Seq != nil {
-		return *this.Seq
+func (this *Header) GetId() uint64 {
+	if this != nil && this.Id != nil {
+		return *this.Id
 	}
 	return 0
 }

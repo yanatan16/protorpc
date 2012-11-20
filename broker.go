@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	zmq "github.com/alecthomas/gozmq"
+	"log"
 )
 
 func Err(msg string, err error) error {
@@ -20,7 +21,7 @@ type Broker struct {
 	frontend, backend zmq.Socket
 }
 
-func NewBroker(context zmq.Context, frontendAddr, backendAddr string) (*Broker, error) {
+func NewBroker(frontendAddr, backendAddr string) (*Broker, error) {
 	frontend, err := context.NewSocket(zmq.ROUTER)
 	if err != nil {
 		return nil, Err("Couldn't create new ROUTER socket", err)
@@ -52,34 +53,24 @@ func (b *Broker) Close() error {
 	return nil
 }
 
-func (b *Broker) Serve() error {
-	// Initialize poll set
-	toPoll := zmq.PollItems{
-		zmq.PollItem{Socket: b.frontend, zmq.Events: zmq.POLLIN},
-		zmq.PollItem{Socket: b.backend, zmq.Events: zmq.POLLIN},
-	}
-
+// A blocking function that will infinitely forward multi-part messages between two zmq.Sockets
+func Forward(a, b zmq.Socket) {
 	for {
-		_, err := zmq.Poll(toPoll, -1)
+		parts, err := a.RecvMultipart(0)
 		if err != nil {
-			return err
+			log.Println("Error receiving message on frontend broker", err)
 		}
 
-		switch {
-		case toPoll[0].REvents&zmq.POLLIN != 0:
-			message, err := toPoll[0].Socket.Recv(0)
-			if err != nil {
-				return err
-			}
-			b.backend.Send(message, 0)
-
-		case toPoll[1].REvents&zmq.POLLIN != 0:
-			message, err := toPoll[1].Socket.Recv(0)
-			if err != nil {
-				return err
-			}
-			b.frontend.Send(message, 0)
+		err = b.SendMultipart(parts, 0)
+		if err != nil {
+			log.Println("Error sending message on backend broker", err)
 		}
+
+		log.Println("Brokered message:", Stringify(parts))
 	}
-	return nil
+}
+
+func (b *Broker) Serve() {
+	go Forward(b.frontend, b.backend)
+	Forward(b.backend, b.frontend)
 }

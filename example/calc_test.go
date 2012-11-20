@@ -24,7 +24,7 @@ func TestClient(t *testing.T) {
 	calcSvr := new(MyCalcService)
 	RegisterCalcService(calcSvr)
 
-	err := protorpc.Serve(server_addr, true)
+	err := protorpc.Serve(server_addr, false)
 	if err != nil {
 		log.Fatal("cant setup calc service:", err)
 	}
@@ -36,6 +36,38 @@ func TestClient(t *testing.T) {
 	}
 	defer calc.Close()
 
+	doCalc(calc, t)
+}
+
+func TestBrokeredClient(t *testing.T) {
+	broker_front := "127.0.0.1:12001"
+	broker_back := "127.0.0.1:12002"
+
+	broker, err := protorpc.NewBroker(broker_front, broker_back)
+	if err != nil {
+		log.Fatal("Error creating broker:", err)
+	}
+	go func() {
+		broker.Serve()
+	}()
+	<-time.After(50 * time.Millisecond)
+
+	calcSvr := new(MyCalcService)
+	RegisterCalcService(calcSvr)
+
+	err = protorpc.Serve(broker_back, true)
+	if err != nil {
+		log.Fatal("cant setup calc service:", err)
+	}
+	<-time.After(50 * time.Millisecond)
+
+	calc, err := NewCalcServiceClient("MyCalcService", broker_front)
+	if err != nil {
+		log.Fatal("cant setup calc service:", err)
+	}
+	defer calc.Close()
+
+	log.Println("TestBrokeredClient now set up, ready to run...")
 	doCalc(calc, t)
 }
 

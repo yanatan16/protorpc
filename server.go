@@ -1,130 +1,107 @@
-// Copyright 2010 Eric Clark. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
 package protorpc
 
 import (
 	"code.google.com/p/goprotobuf/proto"
 	"errors"
-	"io"
+	"log"
+	zmq "github.com/alecthomas/gozmq"
 	"net/rpc"
 )
 
 type serverCodec struct {
-	c    ReadWriteFlushCloser
-	req  *bufferPair
-	resp *bufferPair
+	sock      zmq.Socket
+	req       *proto.Buffer
+	packetIds idMap
+	clientIds map[uint64]uint64
 }
 
-type ReadWriteFlushCloser interface {
-	io.Reader
-	io.Writer
-	io.Closer
-	Flush() error
-}
+func NewServerCodec(conn zmq.Socket) rpc.ServerCodec {
+	req := proto.NewBuffer(nil)
+	packetIds := make(idMap)
+	clientIds := make(map[uint64]uint64)
 
-func NewServerCodec(conn ReadWriteFlushCloser) rpc.ServerCodec {
-	req := &bufferPair{proto.NewBuffer(nil), proto.NewBuffer(nil)}
-	resp := &bufferPair{proto.NewBuffer(nil), proto.NewBuffer(nil)}
-
-	return &serverCodec{conn, req, resp}
+	return &serverCodec{conn, req, packetIds, clientIds}
 }
 
 func (c *serverCodec) ReadRequestHeader(r *rpc.Request) (err error) {
-	c.req.header.Reset()
 
-	lbuf := make([]byte, lenSize)
-	_, err = io.ReadFull(c.c, lbuf)
+	// Read message
+	parts, err := c.sock.RecvMultipart(0)
 	if err != nil {
 		return
 	}
+	log.Println("Server recieved multipart mesage:", Stringify(parts))
 
-	pbuf := make([]byte, decodeLen(lbuf))
-	_, err = io.ReadFull(c.c, pbuf)
-	if err != nil {
-		return
-	}
+	nId := len(parts) - 2
+	ids := parts[:nId]
+	hdr := parts[nId]
+	data := parts[nId+1]
 
-	c.req.header.SetBuf(pbuf)
+	// Read header and body into proto buf
+	c.req.SetBuf(data)
 
+	// Unmarshal header
 	h := new(Header)
-	err = c.req.header.Unmarshal(h)
+	err = proto.Unmarshal(hdr, h)
 	if err != nil {
 		return
 	}
 
-	r.Seq = h.GetSeq()
+	// Increment sequence id and save ids for sending request
+	seq := <-SeqNum
+	c.packetIds[seq] = ids
+	c.clientIds[seq] = h.GetId()
+
+	r.Seq = seq
 	r.ServiceMethod = h.GetServiceMethod()
+
+	log.Println("Server recieved service request:", r)
 
 	return
 }
 
 func (c *serverCodec) ReadRequestBody(message interface{}) (err error) {
-	c.req.body.Reset()
-
-	lbuf := make([]byte, lenSize)
-	_, err = io.ReadFull(c.c, lbuf)
-	if err != nil {
-		return
-	}
-
-	pbuf := make([]byte, decodeLen(lbuf))
-	_, err = io.ReadFull(c.c, pbuf)
-	if err != nil {
-		return
-	}
-
-	c.req.body.SetBuf(pbuf)
-
+	// Request body should have already been stored in c.req.body
+	// Unmarshal body
 	if msg, ok := message.(proto.Message); ok {
-		err = c.req.body.Unmarshal(msg)
+		err = c.req.Unmarshal(msg)
 	} else {
 		err = errors.New("Message body does not implement goprotobuf.Message")
-	}
-	if err != nil {
-		return
 	}
 
 	return
 }
 
 func (c *serverCodec) WriteResponse(r *rpc.Response, message interface{}) (err error) {
-	c.resp.header.Reset()
-	c.resp.body.Reset()
+	resp := NewBufferPair()
 
+	// Extract information and delete from map
+	seq := r.Seq
+	packetIds := c.packetIds[seq]
+	clientId, ok := c.clientIds[seq]
+
+	delete(c.packetIds, seq)
+	delete(c.clientIds, seq)
+
+	if !ok {
+		err = errors.New("Sequence number was not found in id maps.")
+		return
+	}
+
+	// Create the header
 	h := new(Header)
-	h.Seq = &r.Seq
+	h.Id = &clientId
 	h.ServiceMethod = &r.ServiceMethod
 	h.Error = &r.Error
 
-	err = c.resp.header.Marshal(h)
+	err = resp.header.Marshal(h)
 	if err != nil {
 		return
 	}
 
-	_, err = c.c.Write(encodeLen(len(c.resp.header.Bytes())))
-	if err != nil {
-		return
-	}
-
-	_, err = c.c.Write(c.resp.header.Bytes())
-	if err != nil {
-		return
-	}
-
+	// Create the body
 	if msg, ok := message.(proto.Message); ok {
-		err = c.resp.body.Marshal(msg)
-		if err != nil {
-			return
-		}
-
-		_, err = c.c.Write(encodeLen(len(c.resp.body.Bytes())))
-		if err != nil {
-			return
-		}
-
-		_, err = c.c.Write(c.resp.body.Bytes())
+		err = resp.body.Marshal(msg)
 		if err != nil {
 			return
 		}
@@ -133,11 +110,18 @@ func (c *serverCodec) WriteResponse(r *rpc.Response, message interface{}) (err e
 		return
 	}
 
-	err = c.c.Flush()
+	// Create and send message
+	parts := make([][]byte, 0, len(packetIds)+2)
+	parts = append(parts, packetIds...)
+	parts = append(parts, resp.header.Bytes(), resp.body.Bytes())
+
+	err = c.sock.SendMultipart(parts, 0)
+	// log.Println("Server sent multipart mesage:", Stringify(parts))
+	log.Println("Server recieved service response:", r)
 
 	return
 }
 
 func (c *serverCodec) Close() error {
-	return c.c.Close()
+	return c.sock.Close()
 }
