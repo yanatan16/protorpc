@@ -18,19 +18,20 @@ Features:
 
 ## History
 
-protorpc is based off of [protorpc](http://github.com/eclark/protorpc) written by Eric Clark.That material is governed by the first license in the LICENSE file. Further modifications are governed by the second license in the LICENSE file.
+protorpc is based off of [protorpc](http://github.com/eclark/protorpc) written by Eric Clark as of commit [90f1b64](http://github.com/eclark/protorpc/commit/90f1b64). That material is governed by the first license in the LICENSE file. Further modifications are governed by the second license in the LICENSE file.
 
 ## Requirements
 
-Go - http://golang.org/doc/install.html
-protobuf - http://code.google.com/p/protobuf/
-goprotobuf - http://code.google.com/p/goprotobuf/
-0mq - http://zeromq.org
-gozmq - http://github.com/alecthomas/gozmq
+- Go - http://golang.org/doc/install.html
+- protobuf - http://code.google.com/p/protobuf/
+- goprotobuf - http://code.google.com/p/goprotobuf/
+- 0mq - http://zeromq.org
+- gozmq - http://github.com/alecthomas/gozmq
 
 ## Installing
 
 `go get github.com/yanatan16/protorpc`
+
 `go install github.com/yanatan16/protorpc/protoc-gen-go-rpc`
 
 Make sure $GOPATH/bin is on your $PATH. `export PATH=$PATH:$GOPATH/bin`

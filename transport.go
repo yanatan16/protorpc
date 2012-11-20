@@ -1,3 +1,4 @@
+// Package protorpc implements a fast, scalable, and schema'd RPC framework using ZMQ sockets and Protobufs serialization
 package protorpc
 
 import (

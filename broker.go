@@ -1,8 +1,3 @@
-// Simple request-reply broker
-//
-// Author:  Brendan Mc.
-// Requires: http://github.com/alecthomas/gozmq
-
 package protorpc
 
 import (
