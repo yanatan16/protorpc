@@ -8,28 +8,38 @@ import (
 	"code.google.com/p/goprotobuf/proto"
 	"github.com/yanatan16/protorpc"
 	"log"
+	"math/rand"
 	"testing"
 	"time"
 )
 
-func TestNoClient(t *testing.T) {
-	calc := new(MyCalcService)
+const server_addr string = "127.0.0.1:12345"
+const server2_addr string = "127.0.0.1:12346"
+var calcSvr *MyCalcService
 
-	doCalc(calc, t)
-}
-
-func TestClient(t *testing.T) {
-	server_addr := "127.0.0.1:12345"
-
+func init() {
 	calcSvr := new(MyCalcService)
 	RegisterCalcService(calcSvr)
-
 	err := protorpc.Serve(server_addr, false)
 	if err != nil {
 		log.Fatal("cant setup calc service:", err)
 	}
-	<-time.After(50 * time.Millisecond)
 
+	slowCalcSvr := new(SlowCalcService)
+	RegisterCalcService(slowCalcSvr)
+	err = protorpc.Serve(server2_addr, false)
+	if err != nil {
+		log.Fatal("cant setup calc service 2:", err)
+	}
+
+	<-time.After(50 * time.Millisecond)
+}
+
+func TestNoClient(t *testing.T) {
+	doCalc(calcSvr, t)
+}
+
+func TestClient(t *testing.T) {
 	calc, err := NewCalcServiceClient("MyCalcService", server_addr)
 	if err != nil {
 		log.Fatal("cant setup calc service:", err)
@@ -70,6 +80,44 @@ func TestBrokeredClient(t *testing.T) {
 	log.Println("TestBrokeredClient now set up, ready to run...")
 	doCalc(calc, t)
 }
+
+func TestMultiReqClient(t *testing.T) {
+	var nReq = 10
+
+	calc, err := NewCalcServiceClient("SlowCalcService", server2_addr)
+	if err != nil {
+		log.Fatal("cant setup calc service:", err)
+	}
+	defer calc.Close()
+
+	// only add
+	crq := make([]*CalcRequest, nReq)
+	crs := make([]*CalcResponse, nReq)
+	res := make([]int64, nReq)
+	errs := make([]chan error, nReq)
+
+	for i := 0; i < nReq; i++ {
+		a, b := rand.Int63(), rand.Int63()
+		crq[i] = new(CalcRequest)
+		crq[i].A = &a
+		crq[i].B = &b
+		crs[i] = new(CalcResponse)
+		res[i] = a+b
+
+		errs[i] = calc.AddAsync(crq[i], crs[i])
+	}
+
+	for i, cherr := range errs {
+		err := <- cherr
+		if err != nil {
+			t.Fatal("add error:", err)
+		} else if *crs[i].Result != res[i] {
+			t.Error("add result incorrect:", *crs[i].Result, "vs", res[i])
+		}
+
+	}
+}
+
 
 func doCalc(calc CalcService, t *testing.T) {
 	crq := new(CalcRequest)

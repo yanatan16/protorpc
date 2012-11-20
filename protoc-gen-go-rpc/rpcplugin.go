@@ -94,8 +94,21 @@ func (g *RpcPlugin) Generate(file *FileDescriptor) {
 			g.Out()
 			g.P("}")
 
-			g.P()
-		}
+			// Build Asynchronous Request
+			asyncName := name + "Async"
+			g.P("func (self *", serviceName, "Client) ", asyncName, "(request *", input_type, ", response *", output_type, ") (chan error) {")
+			g.In()
+			g.P("ret := make(chan error, 0)")
+			g.P("done := self.Go(self.remoteName + ", Quote("."+name), ", request, response, make(chan *rpc.Call, 1)).Done")
+			g.P("go func() {")
+			g.In()
+			g.P("call := <- done")
+			g.P("ret <- call.Error")
+			g.Out()
+			g.P("}()")
+			g.P("return ret")
+			g.Out()
+			g.P("}")		}
 
 	}
 }

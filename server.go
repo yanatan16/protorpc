@@ -117,7 +117,7 @@ func (c *serverCodec) WriteResponse(r *rpc.Response, message interface{}) (err e
 
 	err = c.sock.SendMultipart(parts, 0)
 	// log.Println("Server sent multipart mesage:", Stringify(parts))
-	log.Println("Server recieved service response:", r)
+	log.Println("Server sent service response:", r)
 
 	return
 }
