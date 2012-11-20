@@ -7,8 +7,8 @@ package example
 import (
 	"code.google.com/p/goprotobuf/proto"
 	"errors"
-	"time"
 	"fmt"
+	"time"
 )
 
 type MyCalcService int
@@ -44,10 +44,10 @@ func (m *MyCalcService) Divide(req *CalcRequest, resp *CalcResponse) (err error)
 	return
 }
 
-
 type SlowCalcService int
+
 func Slow() {
-	<- time.After(time.Second)
+	<-time.After(time.Second)
 }
 func (m *SlowCalcService) Add(req *CalcRequest, resp *CalcResponse) error {
 	Slow()

@@ -13,26 +13,38 @@ import (
 	"time"
 )
 
-const server_addr string = "127.0.0.1:12345"
-const server2_addr string = "127.0.0.1:12346"
+const (
+	server_addr  string = "127.0.0.1:12345"
+	broker_front string = "127.0.0.1:12001"
+	broker_back  string = "127.0.0.1:12002"
+)
+
 var calcSvr *MyCalcService
 
 func init() {
 	calcSvr := new(MyCalcService)
 	RegisterCalcService(calcSvr)
+	slowCalcSvr := new(SlowCalcService)
+	RegisterCalcService(slowCalcSvr)
+
 	err := protorpc.Serve(server_addr, false)
 	if err != nil {
 		log.Fatal("cant setup calc service:", err)
 	}
 
-	slowCalcSvr := new(SlowCalcService)
-	RegisterCalcService(slowCalcSvr)
-	err = protorpc.Serve(server2_addr, false)
+	broker, err := protorpc.NewBroker(broker_front, broker_back)
 	if err != nil {
-		log.Fatal("cant setup calc service 2:", err)
+		log.Fatal("Error creating broker:", err)
 	}
-
+	go func() {
+		broker.Serve()
+	}()
 	<-time.After(50 * time.Millisecond)
+
+	err = protorpc.Serve(broker_back, true)
+	if err != nil {
+		log.Fatal("cant setup calc service:", err)
+	}
 }
 
 func TestNoClient(t *testing.T) {
@@ -50,27 +62,6 @@ func TestClient(t *testing.T) {
 }
 
 func TestBrokeredClient(t *testing.T) {
-	broker_front := "127.0.0.1:12001"
-	broker_back := "127.0.0.1:12002"
-
-	broker, err := protorpc.NewBroker(broker_front, broker_back)
-	if err != nil {
-		log.Fatal("Error creating broker:", err)
-	}
-	go func() {
-		broker.Serve()
-	}()
-	<-time.After(50 * time.Millisecond)
-
-	calcSvr := new(MyCalcService)
-	RegisterCalcService(calcSvr)
-
-	err = protorpc.Serve(broker_back, true)
-	if err != nil {
-		log.Fatal("cant setup calc service:", err)
-	}
-	<-time.After(50 * time.Millisecond)
-
 	calc, err := NewCalcServiceClient("MyCalcService", broker_front)
 	if err != nil {
 		log.Fatal("cant setup calc service:", err)
@@ -84,7 +75,7 @@ func TestBrokeredClient(t *testing.T) {
 func TestMultiReqClient(t *testing.T) {
 	var nReq = 10
 
-	calc, err := NewCalcServiceClient("SlowCalcService", server2_addr)
+	calc, err := NewCalcServiceClient("SlowCalcService", server_addr)
 	if err != nil {
 		log.Fatal("cant setup calc service:", err)
 	}
@@ -97,27 +88,62 @@ func TestMultiReqClient(t *testing.T) {
 	errs := make([]chan error, nReq)
 
 	for i := 0; i < nReq; i++ {
-		a, b := rand.Int63(), rand.Int63()
+		a, b := rand.Int63n(10000000), rand.Int63n(1000000000)
 		crq[i] = new(CalcRequest)
 		crq[i].A = &a
 		crq[i].B = &b
 		crs[i] = new(CalcResponse)
-		res[i] = a+b
 
-		errs[i] = calc.AddAsync(crq[i], crs[i])
+		if rand.Int31n(2)%2 > 0 {
+			errs[i] = calc.AddAsync(crq[i], crs[i])
+			res[i] = a + b
+		} else {
+			errs[i] = calc.MultiplyAsync(crq[i], crs[i])
+			res[i] = a * b
+		}
 	}
 
 	for i, cherr := range errs {
-		err := <- cherr
+		err := <-cherr
 		if err != nil {
 			t.Fatal("add error:", err)
 		} else if *crs[i].Result != res[i] {
 			t.Error("add result incorrect:", *crs[i].Result, "vs", res[i])
 		}
-
 	}
 }
 
+func TestMultiClient(t *testing.T) {
+	calc1, err := NewCalcServiceClient("MyCalcService", broker_front)
+	if err != nil {
+		log.Fatal("cant setup calc service:", err)
+	}
+
+	calc2, err := NewCalcServiceClient("MyCalcService", broker_front)
+	if err != nil {
+		log.Fatal("cant setup calc service:", err)
+	}
+	defer func() {
+		// Wait for zmq to finish with the socket
+		<-time.After(100 * time.Millisecond)
+		calc1.Close()
+		calc2.Close()
+	}()
+
+	log.Println("TestMultiClient now set up, ready to run...")
+	ret := make(chan bool, 0)
+	go func() {
+		doCalc(calc1, t)
+		ret <- true
+	}()
+	go func() {
+		doCalc(calc2, t)
+		ret <- true
+	}()
+
+	<-ret
+	<-ret
+}
 
 func doCalc(calc CalcService, t *testing.T) {
 	crq := new(CalcRequest)
